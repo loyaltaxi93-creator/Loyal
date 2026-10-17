@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
-<head>
+<head>{"name":"loyal-taxi-orders","version":"1.0.0","dependencies":{"@vercel/blob":"^0.27.0"}}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#c8102e"><link rel="manifest" href="/manifest.json"><meta name="apple-mobile-web-app-capable" content="yes"><title>لويال تاكسي – الطلبات</title>
