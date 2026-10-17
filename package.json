@@ -1,1 +1,208 @@
-{"name":"loyal-taxi-orders","version":"1.0.0","dependencies":{"@vercel/blob":"^0.27.0"}}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#c8102e"><link rel="manifest" href="/manifest.json"><meta name="apple-mobile-web-app-capable" content="yes"><title>لويال تاكسي – الطلبات</title>
+<style>
+:root{--red:#c8102e;--bg:#faf7f7;--card:#fff;--tx:#1d1d1f;--mut:#777;--bd:#eadada;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17100f;--card:#241a19;--tx:#f5eeee;--mut:#b5a3a3;--bd:#3a2a29}}
+:root[data-theme="dark"]{--bg:#17100f;--card:#241a19;--tx:#f5eeee;--mut:#b5a3a3;--bd:#3a2a29}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:Tahoma,Arial,sans-serif;font-size:16px}
+header{background:var(--red);color:#fff;padding:14px 16px;font-weight:700;font-size:20px;text-align:center}
+nav{display:flex;gap:6px;padding:10px;background:var(--card);border-bottom:1px solid var(--bd)}
+nav button{flex:1;padding:10px;border:1px solid var(--red);background:var(--card);color:var(--red);border-radius:10px;font:inherit;font-weight:700}
+nav button.on{background:var(--red);color:#fff}
+main{max-width:720px;margin:auto;padding:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:10px}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 3px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit}
+.btn{background:var(--red);color:#fff;border:0;border-radius:10px;padding:11px 14px;font:inherit;font-weight:700;width:100%;margin-top:10px}
+.sm{width:auto;padding:7px 12px;margin:4px 0 0 6px;font-size:14px}
+.gray{background:#888}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.route{font-weight:700;font-size:17px}
+.meta{color:var(--mut);font-size:14px;margin-top:4px}
+.tag{display:inline-block;padding:2px 10px;border-radius:99px;font-size:13px;font-weight:700;background:#ffe3e7;color:var(--red)}
+.tag.ok{background:#dff5e3;color:#1b7a34}.tag.go{background:#fff0cf;color:#9a6a00}
+.hide{display:none}
+.note{font-size:13px;color:var(--mut);text-align:center;padding:8px}
+</style>
+</head>
+<body>
+<header>🚖 لويال تاكسي</header>
+<nav>
+<button id="t1" class="on" onclick="tab(1)">الطلبات</button>
+<button id="t2" onclick="tab(2)">صفحة الشوفيرية</button>
+<button id="t3" onclick="tab(3)">الشوفيرية</button>
+</nav>
+<main>
+<!-- Orders -->
+<section id="p1">
+<div class="card">
+<b>طلب جديد</b>
+<label>اسم الزبون</label><input id="cn">
+<label>رقم الزبون</label><input id="cp" inputmode="tel">
+<label>لوكيشن بيت الزبون</label><input id="loc" placeholder="الصق رابط Google Maps أو اكتب العنوان">
+<div class="row"><div><label>من وين</label><input id="fr" placeholder="مثلاً كفرشيمة"></div><div><label>لوين</label><input id="to"></div></div>
+<div class="row"><div><label>التاريخ</label><input id="dt" type="date"></div><div><label>الساعة</label><input id="tm" type="time"></div></div>
+<label>الشوفير</label><select id="dr"></select>
+<button class="btn" id="saveBtn" onclick="addOrder()">حفظ الطلب</button><button class="btn gray hide" id="cancelEdit" onclick="cancelEdit()">إلغاء التعديل</button>
+</div>
+<div id="list"></div>
+</section>
+<!-- Driver page -->
+<section id="p2" class="hide">
+<div class="card"><label>أنا الشوفير</label><select id="me" onchange="renderMine()"></select></div>
+<div id="mine"></div>
+</section>
+<!-- Drivers -->
+<section id="p3" class="hide">
+<div class="card"><b>إضافة شوفير</b>
+<label>الاسم</label><input id="dn">
+<label>رقم الهاتف</label><input id="dph" inputmode="tel">
+<label>السيارة</label><input id="dcar" placeholder="مثلاً تويوتا أفانزا">
+<button class="btn" onclick="addDriver()">إضافة</button></div>
+<div id="dlist"></div>
+</section>
+<div class="note" id="mode"></div>
+</main>
+<script>
+let orders=[],drivers=[],db=null,store={},editId=null;
+function ov(h){const d=document.createElement("div");d.style.cssText="position:fixed;inset:0;background:#000a;z-index:99;display:flex;align-items:center;justify-content:center;padding:16px";d.innerHTML='<div class="card" style="width:100%;max-width:420px;margin:0">'+h+'</div>';document.body.appendChild(d);return d}
+function toast(m){const d=ov('<div style="font-weight:700">'+esc(m)+'</div><button class="btn">تمام</button>');d.querySelector("button").onclick=()=>d.remove()}
+window.alert=toast;
+function ask(m,f){const d=ov('<div style="font-weight:700">'+esc(m)+'</div><div class="row"><button class="btn" id="y">نعم</button><button class="btn gray" id="n">لا</button></div>');d.querySelector("#y").onclick=()=>{d.remove();f()};d.querySelector("#n").onclick=()=>d.remove()}
+function showMsg(id){const o=orders.find(x=>x.id==id);if(!o)return;const d=ov('<b>رسالة الزبون</b><textarea id="mt" rows="9" readonly></textarea><button class="btn" id="mc">نسخ</button><button class="btn gray" id="mx">إغلاق</button>');const ta=d.querySelector("#mt");ta.value=orderText(o);ta.select();d.querySelector("#mc").onclick=()=>{ta.select();try{document.execCommand("copy");d.querySelector("#mc").textContent="اننسخت ✓"}catch(e){}};d.querySelector("#mx").onclick=()=>d.remove()}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ST={new:["جديد",""],acc:["قبل الطلب","go"],go:["بالطريق","go"],done:["خلص","ok"]};
+
+function tab(n){[1,2,3].forEach(i=>{$("p"+i).classList.toggle("hide",i!=n);$("t"+i).classList.toggle("on",i==n)});}
+
+function local(){try{return JSON.parse(localStorage.getItem("lt")||"{}")}catch(e){return {}}}
+function saveLocal(){try{localStorage.setItem("lt",JSON.stringify({orders,drivers}))}catch(e){}}
+
+function makeDb(){
+ let st={orders:[],drivers:[]},subs={orders:[],drivers:[]},key=localStorage.getItem("ltkey")||"",asking=false;
+ const snap=n=>({docs:st[n].map(x=>{const {id,...r}=x;return {id,data:()=>r}})});
+ const emit=()=>["orders","drivers"].forEach(n=>subs[n].forEach(f=>f(snap(n))));
+ async function call(b){
+  try{const r=await fetch("/api/data",{method:b?"POST":"GET",headers:{"content-type":"application/json","x-key":key},body:b?JSON.stringify(b):undefined});
+  if(r.status==401){if(!asking){asking=true;key=prompt("اكتب كود الدخول")||"";localStorage.setItem("ltkey",key);asking=false}return}
+  if(r.ok){st=await r.json();emit()}}catch(e){}
+ }
+ setInterval(()=>call(),5000);call();
+ return {collection:n=>({onSnapshot:f=>{subs[n].push(f);f(snap(n))},doc:id=>({set:d=>call({op:"set",col:n,id,data:d}),delete:()=>call({op:"del",col:n,id})})})}
+}
+async function init(){
+  $("dt").value=new Date().toISOString().slice(0,10);
+  db=makeDb();
+  if(db){
+    $("mode").textContent="البيانات مشتركة بين كل المستخدمين";
+    db.collection("orders").onSnapshot(s=>{orders=s.docs.map(d=>({id:d.id,...d.data()}));render()},()=>{});
+    db.collection("drivers").onSnapshot(s=>{drivers=s.docs.map(d=>({id:d.id,...d.data()}));render()},()=>{});
+  }else{
+    $("mode").textContent="البيانات محفوظة على هذا الجهاز فقط";
+    const l=local();orders=l.orders||[];drivers=l.drivers||[];render();
+  }
+}
+async function put(col,obj){
+  if(db){const {id,...rest}=obj;await db.collection(col).doc(id).set(rest)}
+  else{const arr=col=="orders"?orders:drivers;const i=arr.findIndex(x=>x.id==obj.id);i>=0?arr[i]=obj:arr.push(obj);saveLocal();render()}
+}
+async function del(col,id){
+  if(db)await db.collection(col).doc(id).delete();
+  else{if(col=="orders")orders=orders.filter(x=>x.id!=id);else drivers=drivers.filter(x=>x.id!=id);saveLocal();render()}
+}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+async function addOrder(){
+  const old=editId?orders.find(x=>x.id==editId):null;const o={id:old?old.id:uid(),name:$("cn").value.trim(),phone:$("cp").value.trim(),loc:$("loc").value.trim(),from:$("fr").value.trim(),to:$("to").value.trim(),date:$("dt").value,time:$("tm").value,driver:$("dr").value,status:old?old.status:"new",created:old?old.created:Date.now()};
+  if(!o.from||!o.to||!o.time){alert("عبّي من وين، لوين، والساعة");return}
+  await put("orders",o);
+  cancelEdit();
+}
+async function addDriver(){
+  const d={id:uid(),name:$("dn").value.trim(),phone:$("dph").value.trim(),car:$("dcar").value.trim()};
+  if(!d.name){alert("اكتب اسم الشوفير");return}
+  await put("drivers",d);["dn","dph","dcar"].forEach(i=>$(i).value="");
+}
+async function setDriver(id,v){const o=orders.find(x=>x.id==id);if(o){o.driver=v;await put("orders",{...o})}}
+async function setStatus(id,s){const o=orders.find(x=>x.id==id);if(o){o.status=s;await put("orders",{...o})}}
+function locHtml(o){const l=(o.loc||"").trim();if(!l)return "—";return /^https?:\/\//i.test(l)?`<a href="${esc(l)}" target="_blank" rel="noopener">فتح الموقع على الخريطة</a>`:esc(l)}
+function orderText(o){
+  const d=drivers.find(x=>x.id==o.driver);
+  let t="🚖 لويال تاكسي\nتفاصيل مشوارك:\n";
+  t+="من: "+o.from+"\nإلى: "+o.to+"\n";
+  t+="التاريخ: "+(o.date||"")+"\nالساعة: "+(o.time||"")+"\n";
+  if(o.loc)t+="موقعك: "+o.loc+"\n";
+  t+=d?"اللي رح ياخدك: "+d.name+(d.car?" – سيارة "+d.car:"")+"\n":"الشوفير: منحدده قريباً\n";
+  return t+"✅ الموعد مأكد الساعة "+(o.time||"")+"، رجاءً رد بكلمة تمام للتأكيد.\nللتواصل واتساب: 70 740 500";
+}
+async function copyOrder(id){
+  const o=orders.find(x=>x.id==id);if(!o)return;const t=orderText(o);
+  try{await navigator.clipboard.writeText(t)}catch(e){
+    const a=document.createElement("textarea");a.value=t;document.body.appendChild(a);a.select();
+    try{document.execCommand("copy")}catch(_){showMsg(id)}a.remove();
+  }
+  alert("اننسخت التفاصيل، الصقها وابعثها للزبون");
+}
+async function shareOrder(id){
+  const o=orders.find(x=>x.id==id);if(!o)return;
+  if(navigator.share){try{await navigator.share({text:orderText(o)});return}catch(e){if(e&&e.name=="AbortError")return}}
+  showMsg(id);
+}
+function waOrder(id){
+  const o=orders.find(x=>x.id==id);if(!o)return;
+  let n=(o.phone||"").replace(/\D/g,"");
+  if(n.startsWith("00"))n=n.slice(2);else if(n.startsWith("0"))n="961"+n.slice(1);else if(n.length==8)n="961"+n;
+  const w=window.open("https://wa.me/"+n+"?text="+encodeURIComponent(orderText(o)),"_blank");if(!w)showMsg(id);
+}
+function editOrder(id){const o=orders.find(x=>x.id==id);if(!o)return;editId=id;
+$("cn").value=o.name||"";$("cp").value=o.phone||"";$("loc").value=o.loc||"";$("fr").value=o.from||"";$("to").value=o.to||"";$("dt").value=o.date||"";$("tm").value=o.time||"";$("dr").value=o.driver||"";
+$("saveBtn").textContent="حفظ التعديل";$("cancelEdit").classList.remove("hide");tab(1);window.scrollTo(0,0)}
+function cancelEdit(){editId=null;["cn","cp","loc","fr","to"].forEach(i=>$(i).value="");$("saveBtn").textContent="حفظ الطلب";$("cancelEdit").classList.add("hide")}
+function dname(id){const d=drivers.find(x=>x.id==id);return d?d.name:"بدون شوفير"}
+function opts(sel){return '<option value="">— بدون شوفير —</option>'+drivers.map(d=>`<option value="${d.id}" ${d.id==sel?"selected":""}>${esc(d.name)}${d.car?" – "+esc(d.car):""}</option>`).join("")}
+function sorted(){return [...orders].sort((a,b)=>((a.date||"")+(a.time||"")).localeCompare((b.date||"")+(b.time||"")))}
+
+function card(o,driverView){
+  const st=ST[o.status||"new"];
+  let h=`<div class="card"><div class="route">${esc(o.from)} ← ${esc(o.to)}</div>
+  <div class="meta">🕐 ${esc(o.date||"")} ${esc(o.time||"")} &nbsp; <span class="tag ${st[1]}">${st[0]}</span></div>
+  <div class="meta">📍 ${locHtml(o)}</div>
+  <div class="meta">👤 ${esc(o.name||"—")} ${o.phone?` · <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>`:""}</div>`;
+  if(driverView){
+    h+=`<div>`;
+    if(o.status=="new")h+=`<button class="btn sm" onclick="setStatus('${o.id}','acc')">قبلت</button>`;
+    if(o.status=="acc")h+=`<button class="btn sm" onclick="setStatus('${o.id}','go')">صرت بالطريق</button>`;
+    if(o.status=="go")h+=`<button class="btn sm" onclick="setStatus('${o.id}','done')">خلصت المشوار</button>`;
+    h+=`</div>`;
+  }else{
+    h+=`<label>الشوفير</label><select onchange="setDriver('${o.id}',this.value)">${opts(o.driver)}</select>
+    <button class="btn sm" onclick="editOrder('${o.id}')">تعديل</button><button class="btn sm" onclick="copyOrder('${o.id}')">نسخ التفاصيل</button><button class="btn sm" onclick="waOrder('${o.id}')">واتساب للزبون</button><button class="btn sm" onclick="shareOrder('${o.id}')">مشاركة</button>
+    <button class="btn sm gray" onclick="ask('حذف الطلب؟',()=>del('orders','${o.id}'))">حذف</button>`;
+  }
+  return h+`</div>`;
+}
+function renderMine(){
+  const m=$("me").value;
+  const mine=sorted().filter(o=>o.driver==m&&m);
+  $("mine").innerHTML=m?(mine.map(o=>card(o,true)).join("")||'<div class="note">ما في طلبات إلك</div>'):'<div class="note">اختار اسمك</div>';
+}
+function render(){
+  const keep=$("dr").value,keepMe=$("me").value;
+  $("dr").innerHTML=opts(keep);
+  $("me").innerHTML='<option value="">— اختار اسمك —</option>'+drivers.map(d=>`<option value="${d.id}" ${d.id==keepMe?"selected":""}>${esc(d.name)}</option>`).join("");
+  const l=sorted();
+  $("list").innerHTML=l.map(o=>card(o,false)).join("")||'<div class="note">ما في طلبات بعد</div>';
+  $("dlist").innerHTML=drivers.map(d=>`<div class="card"><b>${esc(d.name)}</b><div class="meta">🚗 ${esc(d.car||"—")} · ${esc(d.phone||"")}</div><button class="btn sm gray" onclick="ask('حذف الشوفير؟',()=>del('drivers','${d.id}'))">حذف</button></div>`).join("");
+  renderMine();
+}
+init();
+</script>
+</body>
+</html>
